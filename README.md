@@ -47,3 +47,6 @@ Any user can click on the "Transactions" button at the top of the app and view a
 ## Version Log
 ### v1.0
 Initial release
+
+### v1.1
+Fixed problem where other computers on the network could not reach the app.
