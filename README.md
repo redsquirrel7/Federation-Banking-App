@@ -50,3 +50,6 @@ Initial release
 
 ### v1.1
 Fixed problem where other computers on the network could not reach the app.
+
+### v1.2
+Added directory of users so users can easily find other users.
