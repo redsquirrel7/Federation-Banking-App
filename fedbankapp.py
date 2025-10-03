@@ -11,7 +11,7 @@
 # |    |  _/\__  \  /    \|  |/ /  \_____  \ |  |/     \|  |  \  | \__  \\   __\/  _ \_  __ \
 # |    |   \ / __ \|   |  \    <   /        \|  |  Y Y  \  |  /  |__/ __ \|  | (  <_> )  | \/
 # |______  /(____  /___|  /__|_ \ /_______  /|__|__|_|  /____/|____(____  /__|  \____/|__|
-#        \/      \/     \/     \/         \/          \/                \/                   v1.1
+#        \/      \/     \/     \/         \/          \/                \/                   v1.2
 #
 # Written by Squ1rr3l
 #
@@ -416,6 +416,31 @@ def admin_move():
         flash(str(e), 'err')
     return redirect(url_for('admin_home'))
 
+# ----------------------- Routes: user directory (non-admin search) -----------------------
+@app.route('/directory')
+@login_required
+def directory():
+    """
+    Non-admin user directory to find wallet addresses.
+    - Lists only active users
+    - Search by username (case-insensitive) or wallet address (case-insensitive)
+    - Limits results to 50 to avoid huge responses
+    """
+    q = request.args.get('q', '').strip()
+    base = User.query.filter_by(is_active=True)
+
+    if q:
+        # Case-insensitive match on username; normalize wallet address to uppercase for convenience
+        users = base.filter(
+            (User.username.ilike(f"%{q}%")) | (User.wallet_address.ilike(f"%{q.upper()}%"))
+        ).order_by(User.username.asc()).limit(50).all()
+    else:
+        # Default: show a small, alphabetical slice of users
+        users = base.order_by(User.username.asc()).limit(20).all()
+
+    return render_page(TPL_DIRECTORY, title="User Directory", users=users, q=q)
+
+
 # ----------------------- Templates -----------------------
 
 TPL_BASE = r"""
@@ -464,6 +489,7 @@ TPL_BASE = r"""
     <nav>
       {% if user %}
         <a class="btn" href="{{ url_for('dashboard') }}">Wallet</a>
+        <a class="btn" href="{{ url_for('directory') }}">Directory</a>
         <a class="btn" href="{{ url_for('transactions') }}">Transactions</a>
         {% if user.is_admin %}<a class="btn" href="{{ url_for('admin_home') }}">Admin</a>{% endif %}
         <a class="btn btn-danger" href="{{ url_for('logout') }}">Log out</a>
@@ -712,6 +738,62 @@ TPL_ADMIN = r"""
   </section>
 </div>
 """
+
+TPL_DIRECTORY = r"""
+<h2>User Directory</h2>
+<form method="get" action="{{ url_for('directory') }}">
+  <div class="row">
+    <div style="flex: 2 1 360px">
+      <label>Search by Username or Address</label>
+      <input name="q" value="{{ q }}" placeholder="e.g. 'kara' or 'FCR-ORION-ABCD-1234'" />
+    </div>
+    <div style="align-self:end">
+      <button class="btn" type="submit">Search</button>
+    </div>
+  </div>
+  <p class="muted" style="margin-top:8px">
+    Showing {{ users|length }} result{{ '' if users|length==1 else 's' }}.
+    {% if not q %}Tip: type to search across active users.{% endif %}
+  </p>
+</form>
+
+<table>
+  <tr>
+    <th>User</th>
+    <th>Wallet Address</th>
+    <th></th>
+  </tr>
+  {% for u in users %}
+  <tr>
+    <td>
+      {% if user and u.id == user.id %}
+        <strong>{{ u.username }}</strong> <span class="tag">you</span>
+      {% else %}
+        {{ u.username }}
+      {% endif %}
+    </td>
+    <td class="mono">{{ u.wallet_address }}</td>
+    <td>
+      <button class="btn" type="button" onclick="copyAddr('{{ u.wallet_address }}')">Copy</button>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="3" class="muted">No matches found.</td></tr>
+  {% endfor %}
+</table>
+
+<script>
+  async function copyAddr(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      alert('Address copied to clipboard: ' + text);
+    } catch (e) {
+      alert('Could not copy address. Please copy manually.');
+    }
+  }
+</script>
+"""
+
 
 if __name__ == '__main__':
     app.run(
