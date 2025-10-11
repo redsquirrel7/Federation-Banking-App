@@ -46,10 +46,14 @@ Any user can click on the "Transactions" button at the top of the app and view a
 
 ## Version Log
 ### v1.0
-Initial release
+- Initial release
 
 ### v1.1
-Fixed problem where other computers on the network could not reach the app.
+- Fixed problem where other computers on the network could not reach the app.
 
 ### v1.2
-Added directory of users so users can easily find other users.
+- Added directory of users so users can easily find other users.
+
+### v1.3
+- Added error message for failed login due to deactivated account
+- Added "Total Credits in Circulation" feature to admin panel
