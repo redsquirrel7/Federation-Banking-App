@@ -11,7 +11,7 @@
 # |    |  _/\__  \  /    \|  |/ /  \_____  \ |  |/     \|  |  \  | \__  \\   __\/  _ \_  __ \
 # |    |   \ / __ \|   |  \    <   /        \|  |  Y Y  \  |  /  |__/ __ \|  | (  <_> )  | \/
 # |______  /(____  /___|  /__|_ \ /_______  /|__|__|_|  /____/|____(____  /__|  \____/|__|
-#        \/      \/     \/     \/         \/          \/                \/                   v1.2
+#        \/      \/     \/     \/         \/          \/                \/                   v1.3
 #
 # Written by Squ1rr3l
 #
@@ -55,6 +55,7 @@ from flask import (
 )
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import func
 
 # ----------------------- Config -----------------------
 APP_NAME = "Federation Credits"
@@ -227,12 +228,23 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username','').strip()
         password = request.form.get('password','')
-        user = User.query.filter_by(username=username, is_active=True).first()
-        if user and user.check_password(password):
+
+        user = User.query.filter_by(username=username).first()
+
+        if not user:
+            # Username doesn't exist at all
+            flash("Invalid username or password.", 'err')
+        elif not user.is_active:
+            # User found but deactivated
+            flash("Your account has been seized by the Federation. Please contact an administrator.", 'err')
+        elif not user.check_password(password):
+            # Wrong password
+            flash("Invalid username or password.", 'err')
+        else:
+            # Success
             session['uid'] = user.id
             flash("Access granted.", 'ok')
             return redirect(request.args.get('next') or url_for('dashboard'))
-        flash("Invalid credentials or deactivated account.", 'err')
     return render_page(TPL_LOGIN, title="Log in")
 
 @app.route('/logout')
@@ -291,6 +303,14 @@ def transactions():
 @admin_required
 def admin_home():
     q = request.args.get('q','').strip()
+
+    # ---- NEW: total circulation (active users only) ----
+    total_cents = db.session.query(func.coalesce(func.sum(User.balance_cents), 0))\
+                            .filter(User.is_active.is_(True))\
+                            .scalar()
+    total_circulation = Decimal(total_cents) / Decimal(10**DECIMALS)
+    # ----------------------------------------------------
+
     users = []
     if q:
         users = User.query.filter(
@@ -298,7 +318,7 @@ def admin_home():
         ).order_by(User.created_at.desc()).limit(50).all()
     else:
         users = User.query.order_by(User.created_at.desc()).limit(20).all()
-    return render_page(TPL_ADMIN, title="Command Deck", users=users, q=q)
+    return render_page(TPL_ADMIN, title="Command Deck", users=users, q=q, total_circulation=total_circulation)
 
 @app.route('/admin/create_user', methods=['POST'])
 @admin_required
@@ -654,6 +674,14 @@ TPL_TXS = r"""
 
 TPL_ADMIN = r"""
 <h2>Command Deck</h2>
+<!-- NEW: Total in Circulation summary -->
+<p style="margin:6px 0 14px 0">
+  <span class="tag" style="font-size:14px; padding:6px 10px">
+    Total Credits in Circulation:
+    <strong>{{ '%.2f' % total_circulation }} {{ CURRENCY }}</strong>
+  </span>
+</p>
+<!-- /NEW -->
 <form method="get" action="{{ url_for('admin_home') }}">
   <input name="q" value="{{ q }}" placeholder="Search users or addresses" />
   <button class="btn" type="submit">Scan</button>
